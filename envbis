@@ -1,0 +1,4 @@
+# Materia by Wayfair - Environment Variables Template
+# Fill in your Subconscious platform API key below, then rename this file to `.env`
+
+SUBCONSCIOUS_API_KEY="YOUR_SUBCONSCIOUS_API_KEY_HERE"
