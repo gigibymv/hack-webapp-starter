@@ -1,12 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
+import * as materiaTools from "./materia-tools";
 
-/**
- * Example tools for the hackathon starter.
- *
- * Add your own tools here — connect APIs, databases, Cloudflare Workers,
- * Baseten endpoints, or wrap MCP server tools (see lib/tools/mcp-tools.ts).
- */
 export const getWeather = tool({
   description: "Get the current weather for a city",
   inputSchema: z.object({
@@ -97,9 +92,11 @@ export const runLongTask = tool({
   },
 });
 
+// Export all tools together
 export const chatTools = {
   getWeather,
   calculate,
+  ...materiaTools,
 };
 
 export const agentTools = {
@@ -107,4 +104,5 @@ export const agentTools = {
   calculate,
   webSearch,
   runLongTask,
+  ...materiaTools,
 };
