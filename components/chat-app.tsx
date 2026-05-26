@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MOCK_CATALOG, type Product } from "@/lib/tools/catalog";
+import type { FurniturePlacement, RoomVisionResult } from "@/app/api/room-vision/route";
 
 type DemoState = "landing" | "brief" | "clarify" | "workspace" | "plan" | "revised";
 type Tab = "fit" | "budget" | "delivery" | "reviews" | "alternatives";
@@ -28,6 +29,7 @@ export function ChatApp() {
   const [checklistIndex, setChecklistIndex] = useState(-1);
   const [toolLogs, setToolLogs] = useState<string[]>([]);
   const workspaceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const checklistItems = [
     { label: "Analyzing room photo...", desc: "Detected cozy warm modern style, neutral beige walls, hardwood oak flooring, strong natural light." },
@@ -66,10 +68,56 @@ export function ChatApp() {
   const [currentCart, setCurrentCart] = useState<Product[]>(baseCart);
   const totalCost = currentCart.reduce((sum, p) => sum + p.price, 0);
 
+  // Room photo — set by upload or sample
+  const SAMPLE_ROOM_PHOTO = "https://lh3.googleusercontent.com/aida-public/AB6AXuA30FWmE8ZXkCQJTLOHZFTzaaVisAEyYzEHf-zH9UMLKYLdK4FMhtmD-RzSR_ZeaPbGpz7hkLmOeHeFhUiLKJr-nilFwAY4ei_FcMTUCDFMLTGL5EmchU9u9gFqwZg4JefRqLpFnGS9F6V0s3z5xGCMoSfvTxOTZ1fP3jMJBsZZKpvZ1GbeqTJWjUj23RVDcWr5DKw6t6K0o3AkBkR5CydDtd5HPfeb2OyzpDikDUPs6FchUHmjmqwM3AnKgcNDVdpWI7OSyHrYgfQ";
+  const [roomPhotoUrl, setRoomPhotoUrl] = useState<string>(SAMPLE_ROOM_PHOTO);
+
+  // Category → icon + color for overlays
+  const CATEGORY_STYLE: Record<string, { icon: string; bg: string; border: string; text: string }> = {
+    bed:        { icon: "bed",       bg: "bg-[#006b55]/25",  border: "border-[#006b55]",    text: "text-white" },
+    mattress:   { icon: "layers",    bg: "bg-blue-600/20",   border: "border-blue-400",     text: "text-blue-100" },
+    nightstand: { icon: "nightlight",bg: "bg-amber-800/30",  border: "border-amber-400",    text: "text-amber-100" },
+    lighting:   { icon: "light",     bg: "bg-yellow-400/80", border: "border-yellow-200",   text: "text-yellow-900" },
+    rug:        { icon: "texture",   bg: "bg-purple-700/20", border: "border-purple-300",   text: "text-purple-100" },
+    decor:      { icon: "style",     bg: "bg-pink-700/20",   border: "border-pink-300",     text: "text-pink-100" },
+  };
+
+  // Vision state
+  const [visionLoading, setVisionLoading] = useState(false);
+  const [visionResult, setVisionResult] = useState<RoomVisionResult | null>(null);
+  const [visionMessages, setVisionMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+
+  const callVisionAPI = useCallback(async (
+    photoUrl: string,
+    cart: Product[],
+    messages: Array<{ role: "user" | "assistant"; content: string }> = [],
+    currentPlacements?: FurniturePlacement[]
+  ) => {
+    setVisionLoading(true);
+    try {
+      const cartItems = cart.map(p => ({ id: p.id, category: p.category, name: p.name, price: p.price }));
+      const res = await fetch("/api/room-vision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoDataUrl: photoUrl, cartItems, messages, currentPlacements }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json() as RoomVisionResult;
+      setVisionResult(data);
+      return data;
+    } catch (err) {
+      console.error("[vision]", err);
+    } finally {
+      setVisionLoading(false);
+    }
+  }, []);
+
   const startWorkspaceAnimation = () => {
     setCurrentState("workspace");
     setChecklistIndex(0);
     setToolLogs([]);
+    setVisionResult(null);
+    setVisionMessages([]);
 
     let step = 0;
     if (workspaceTimerRef.current) clearInterval(workspaceTimerRef.current);
@@ -85,6 +133,8 @@ export function ChatApp() {
       } else {
         if (workspaceTimerRef.current) clearInterval(workspaceTimerRef.current);
         setCurrentState("plan");
+        // Trigger vision analysis once plan is ready
+        callVisionAPI(roomPhotoUrl, baseCart);
       }
     }, 1200);
   };
@@ -95,7 +145,7 @@ export function ChatApp() {
     };
   }, []);
 
-  const handleRevisionSubmit = (e: React.FormEvent) => {
+  const handleRevisionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
@@ -103,21 +153,36 @@ export function ChatApp() {
     setChatHistory(prev => [...prev, { role: 'user', text: userMsg }]);
     setChatInput("");
 
-    setTimeout(() => {
-      if (userMsg.toLowerCase().includes("hotel") || userMsg.toLowerCase().includes("luxury") || userMsg.toLowerCase().includes("like")) {
-        setCurrentCart(revisedCart);
-        setCurrentState("revised");
-        setChatHistory(prev => [...prev, {
-          role: 'assistant',
-          text: "I've revised the plan. I swapped out the bohemian-style Jute rug, table lamps, and bedding for their hotel-luxury counterparts (featuring ivory borders, crisp cotton finishes, and elegant brass lamp columns). Your core framework remains preserved, and the new total of $1,428 remains safely under your $1,500 budget limit."
-        }]);
-      } else {
-        setChatHistory(prev => [...prev, {
-          role: 'assistant',
-          text: "I've analyzed your feedback. Swapping items while preserving your Friday arrival schedule and avoiding heavy assembly. Plan adjusted accordingly."
-        }]);
-      }
-    }, 1000);
+    // Swap cart if hotel/luxury requested
+    const isHotel = /hotel|luxury|white|crisp|elegant/i.test(userMsg);
+    const newCart = isHotel ? revisedCart : currentCart;
+    if (isHotel) {
+      setCurrentCart(revisedCart);
+      setCurrentState("revised");
+    }
+
+    // Build updated vision messages
+    const updatedMessages: Array<{ role: "user" | "assistant"; content: string }> = [
+      ...visionMessages,
+      { role: "user", content: userMsg },
+    ];
+    setVisionMessages(updatedMessages);
+
+    // Call vision API with the revision request
+    const result = await callVisionAPI(
+      roomPhotoUrl,
+      newCart,
+      updatedMessages,
+      visionResult?.placements
+    );
+
+    const assistantReply = result?.narrative ??
+      (isHotel
+        ? "I've revised the plan to a hotel-luxury aesthetic — swapped bedding, lamps, and rug for their hotel-style counterparts. Budget and delivery preserved."
+        : "I've updated the room layout based on your feedback while preserving fit and delivery constraints.");
+
+    setChatHistory(prev => [...prev, { role: 'assistant', text: assistantReply }]);
+    setVisionMessages(prev => [...prev, { role: "assistant", content: assistantReply }]);
   };
 
   return (
@@ -370,9 +435,16 @@ export function ChatApp() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Reference Photo</label>
-                  <div className="h-11 w-full rounded-lg border border-dashed border-[#c2c7ce] bg-[#f1fbff]/20 flex items-center justify-center cursor-pointer hover:border-zinc-400 transition">
-                    <span className="text-[11px] text-zinc-500 font-bold">📷 empty_bedroom.png</span>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Room Photo</label>
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) { const r = new FileReader(); r.onload = () => setRoomPhotoUrl(r.result as string); r.readAsDataURL(file); }
+                  }} />
+                  <div onClick={() => photoInputRef.current?.click()}
+                    className="h-11 w-full rounded-lg border border-dashed border-[#c2c7ce] bg-[#f1fbff]/20 flex items-center justify-center cursor-pointer hover:border-[#006b55] transition gap-2">
+                    {roomPhotoUrl !== SAMPLE_ROOM_PHOTO
+                      ? <span className="text-[10px] text-[#006b55] font-bold">✓ Photo uploaded</span>
+                      : <><span className="material-symbols-outlined text-zinc-400 text-sm">add_a_photo</span><span className="text-[10px] text-zinc-500 font-bold">Upload room photo</span></>}
                   </div>
                 </div>
               </div>
@@ -594,28 +666,104 @@ export function ChatApp() {
 
               {/* Interactive Tab contents */}
               <div className="flex-1 relative p-8 flex items-center justify-center overflow-hidden blueprint-grid">
-                {/* FIT ROOM DIAGRAM */}
+                {/* FIT — Room photo staging view with AI-placed furniture */}
                 {activeTab === "fit" && (
-                  <div className="w-full max-w-lg aspect-[4/3] bg-white border-2 border-[#03060a] shadow-xl p-8 relative rounded-xl">
-                    <div className="absolute inset-4 border-4 border-[#c2c7ce]/30 pointer-events-none rounded"></div>
-                    <div className="absolute top-1/4 left-1/4 w-[200px] h-[180px] border-2 border-dashed border-[#006b55]/40 rounded-sm pointer-events-none"></div>
-                    
-                    {/* Platform Bed frame */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-48 bg-[#006b55]/10 border-2 border-[#006b55] flex items-center justify-center rounded cursor-help">
-                      <span className="text-[10px] font-bold text-[#006b55] uppercase">Platform Bed</span>
+                  <div className="w-full h-full flex flex-col gap-3">
+                    {/* Room photo with furniture overlaid */}
+                    <div className="relative w-full flex-1 min-h-0 rounded-xl overflow-hidden border border-[#c5c6ca] shadow-lg" style={{ minHeight: 320 }}>
+                      {/* Room photo background */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={roomPhotoUrl} alt="Your room" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/15" />
+
+                      {/* AI-placed furniture overlays */}
+                      {(visionResult?.placements ?? []).map((p, i) => {
+                        const style = CATEGORY_STYLE[p.category] ?? CATEGORY_STYLE.decor;
+                        const isBed = p.category === "bed";
+                        const isRug = p.category === "rug";
+                        const isLamp = p.category === "lighting";
+                        return (
+                          <div
+                            key={`${p.productId}-${i}`}
+                            className={`absolute flex flex-col items-center justify-center transition-all duration-500 ${isRug ? "border-2 border-dashed" : "border-2"} ${style.border} ${style.bg} backdrop-blur-sm rounded-lg`}
+                            style={{
+                              left: `${p.x}%`,
+                              top: `${p.y}%`,
+                              width: `${p.width}%`,
+                              height: `${p.height}%`,
+                              zIndex: p.zIndex,
+                            }}
+                          >
+                            {/* Lamp: circle shape */}
+                            {isLamp ? (
+                              <div className={`w-full h-full rounded-full ${style.bg} border-2 ${style.border} flex items-center justify-center`}>
+                                <span className="material-symbols-outlined text-yellow-200 text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>light</span>
+                              </div>
+                            ) : (
+                              <>
+                                {isBed && <span className="material-symbols-outlined text-white/80 text-xl mb-1" style={{ fontVariationSettings: "'FILL' 1" }}>bed</span>}
+                                <div className="bg-black/60 backdrop-blur rounded px-1.5 py-0.5 flex items-center gap-1 max-w-full">
+                                  <span className="material-symbols-outlined text-[10px]" style={{ color: "white" }}>{style.icon}</span>
+                                  <span className="text-[8px] font-bold text-white truncate max-w-[90px]">{p.label}</span>
+                                  <span className="text-[8px] font-bold text-emerald-300 flex-shrink-0">${p.price}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Loading state */}
+                      {visionLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-50">
+                          <div className="bg-white/95 rounded-xl px-5 py-4 flex items-center gap-3 shadow-xl">
+                            <div className="w-5 h-5 rounded-full border-2 border-[#006b55] border-t-transparent animate-spin" />
+                            <div>
+                              <div className="text-xs font-bold text-zinc-800">AI analyzing your room...</div>
+                              <div className="text-[9px] text-zinc-500">Placing furniture to match your space</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Room analysis badge */}
+                      {visionResult && (
+                        <div className="absolute top-3 left-3 z-50 bg-white/90 rounded-lg px-3 py-2 shadow max-w-[200px]">
+                          <div className="text-[9px] font-bold text-[#006b55] uppercase tracking-wider">{visionResult.designTitle}</div>
+                          <div className="text-[8px] text-zinc-600 mt-0.5">{visionResult.roomAnalysis.style} · {visionResult.roomAnalysis.estimatedSize}</div>
+                        </div>
+                      )}
+
+                      {/* Fit confidence */}
+                      <div className="absolute top-3 right-3 z-50 bg-white/90 rounded-full px-3 py-1 flex items-center gap-1.5 shadow">
+                        <span className="h-2 w-2 rounded-full bg-[#006b55]" />
+                        <span className="text-[9px] font-bold text-zinc-800">92% Fit Confidence</span>
+                      </div>
+
+                      {/* Clearance badges */}
+                      <div className="absolute bottom-3 left-3 z-50 flex flex-col gap-1">
+                        <div className="flex items-center gap-1 bg-[#006b55]/90 text-white text-[8px] font-bold px-2 py-1 rounded-full">
+                          <span className="material-symbols-outlined text-xs">check_circle</span>
+                          30″ walkway clearance
+                        </div>
+                        <div className="flex items-center gap-1 bg-[#006b55]/90 text-white text-[8px] font-bold px-2 py-1 rounded-full">
+                          <span className="material-symbols-outlined text-xs">check_circle</span>
+                          36″ foot clearance
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Lamps */}
-                    <div className="absolute top-[32%] left-[26%] w-8 h-8 rounded-full bg-[#dfeaef] border border-[#c2c7ce] flex items-center justify-center">
-                      <span className="material-symbols-outlined text-xs text-[#006b55]">light</span>
-                    </div>
-                    <div className="absolute top-[32%] right-[26%] w-8 h-8 rounded-full bg-[#dfeaef] border border-[#c2c7ce] flex items-center justify-center">
-                      <span className="material-symbols-outlined text-xs text-[#006b55]">light</span>
-                    </div>
-
-                    {/* Rug area */}
-                    <div className="absolute top-[52%] left-1/2 -translate-x-1/2 w-[240px] h-[140px] border border-[#c5c6ca] bg-[#e4f0f4]/20 -z-10 rounded flex items-end justify-center pb-1">
-                      <span className="text-[9px] font-bold text-[#006b55]/70 uppercase">Jute Rug (8x10)</span>
+                    {/* Product chips below the room */}
+                    <div className="flex flex-wrap gap-2">
+                      {currentCart.map(p => (
+                        <div key={p.id} className="flex items-center gap-1.5 bg-white border border-[#c5c6ca] rounded-full px-3 py-1 shadow-sm">
+                          <span className="material-symbols-outlined text-[#006b55] text-xs">
+                            {p.category === "bed" ? "bed" : p.category === "mattress" ? "layers" : p.category === "nightstand" ? "nightlight" : p.category === "lighting" ? "light" : p.category === "rug" ? "texture" : "style"}
+                          </span>
+                          <span className="text-[9px] font-bold text-zinc-700">{p.name.split(" ").slice(0,3).join(" ")}</span>
+                          <span className="text-[9px] font-semibold text-[#006b55]">${p.price}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
