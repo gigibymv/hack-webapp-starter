@@ -18,3 +18,81 @@ body {
   color: #f5f5f5;
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* ── Glassmorphism utilities ─────────────────────────────────────── */
+
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-brand {
+  background: rgba(255, 92, 40, 0.07);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 92, 40, 0.18);
+}
+
+.glass-panel {
+  background: rgba(10, 10, 10, 0.7);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-card {
+  background: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.15s ease;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 92, 40, 0.25);
+}
+
+/* ── Rejection badge variants ─────────────────────────────────────── */
+
+.rejection-dimensions {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: rgb(147, 197, 253);
+}
+
+.rejection-assembly {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.25);
+  color: rgb(253, 224, 71);
+}
+
+.rejection-budget {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: rgb(252, 165, 165);
+}
+
+.rejection-delivery {
+  background: rgba(168, 85, 247, 0.08);
+  border-color: rgba(168, 85, 247, 0.25);
+  color: rgb(216, 180, 254);
+}
+
+.rejection-aesthetic {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.25);
+  color: rgb(94, 234, 212);
+}
+
+/* ── Animated gradient border for active agent ────────────────────── */
+
+@keyframes border-pulse {
+  0%, 100% { border-color: rgba(255, 92, 40, 0.3); }
+  50% { border-color: rgba(255, 92, 40, 0.7); }
+}
+
+.agent-active-border {
+  animation: border-pulse 2s ease-in-out infinite;
+}
