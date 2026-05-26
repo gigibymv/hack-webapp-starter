@@ -252,31 +252,31 @@ export function ChatApp() {
                   {/* Cart preview list */}
                   <div className="space-y-3 overflow-y-auto py-2">
                     <div className="flex gap-3 items-center">
-                      <div className="w-12 h-12 rounded bg-[#e4f0f4] flex-shrink-0 flex items-center justify-center border border-[#c2c7ce]">
-                        <span className="text-[10px] font-bold text-zinc-500">CHAIR</span>
+                      <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0 border border-[#c2c7ce] bg-white flex items-center justify-center">
+                        <img src="/images/bed_101.png" alt="Bensu Boucle Bed" className="w-full h-full object-cover" />
                       </div>
                       <div className="text-left">
-                        <p className="text-[11px] font-bold text-zinc-800">Elowen Lounge Chair</p>
-                        <p className="text-[9px] text-[#006b55] font-semibold">Dimensions Verified</p>
-                        <p className="text-[10px] font-bold text-zinc-700 mt-0.5">$849.00</p>
+                        <p className="text-[11px] font-bold text-zinc-800">Bensu Boucle Bed Frame</p>
+                        <p className="text-[9px] text-[#006b55] font-semibold">Clearance Verified</p>
+                        <p className="text-[10px] font-bold text-zinc-700 mt-0.5">$375.00</p>
                       </div>
                     </div>
                     <div className="flex gap-3 items-center">
-                      <div className="w-12 h-12 rounded bg-[#e4f0f4] flex-shrink-0 flex items-center justify-center border border-[#c2c7ce]">
-                        <span className="text-[10px] font-bold text-zinc-500">SOFA</span>
+                      <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0 border border-[#c2c7ce] bg-white flex items-center justify-center">
+                        <img src="/images/nightstand_301.png" alt="Ahouh Nightstands" className="w-full h-full object-cover" />
                       </div>
                       <div className="text-left">
-                        <p className="text-[11px] font-bold text-zinc-800">Moda Sofa (3-Seater)</p>
-                        <p className="text-[9px] text-[#006b55] font-semibold">Fits Entryway (32")</p>
-                        <p className="text-[10px] font-bold text-zinc-700 mt-0.5">$1,299.00</p>
+                        <p className="text-[11px] font-bold text-zinc-800">Ahouh Nightstands (Set of 2)</p>
+                        <p className="text-[9px] text-[#006b55] font-semibold">Fits 12x12 Layout</p>
+                        <p className="text-[10px] font-bold text-zinc-700 mt-0.5">$380.00</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="border-t border-[#c5c6ca] pt-3 mt-auto">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-[10px] font-bold text-zinc-500">Total (4 items)</span>
-                      <span className="text-base font-extrabold text-[#03060a]">$2,840.00</span>
+                      <span className="text-[10px] font-bold text-zinc-500">Total (2 items)</span>
+                      <span className="text-base font-extrabold text-[#03060a]">$755.00</span>
                     </div>
                     <button className="w-full bg-[#006b55] text-white py-2 rounded-lg font-bold text-xs hover:bg-[#005140] transition flex items-center justify-center gap-2">
                       <span className="material-symbols-outlined text-sm">shopping_cart</span>
@@ -758,8 +758,12 @@ export function ChatApp() {
                 <div className="space-y-3">
                   {currentCart.map(p => (
                     <div key={p.id} className="bg-white p-3 rounded-lg border border-[#c5c6ca] flex gap-3 hover:border-[#006b55] transition">
-                      <div className="w-14 h-14 rounded bg-[#e4f0f4] flex-shrink-0 flex items-center justify-center border border-[#c2c7ce]">
-                        <span className="text-[8px] font-extrabold text-zinc-500">{p.category.toUpperCase()}</span>
+                      <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0 border border-[#c2c7ce] bg-white flex items-center justify-center">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[8px] font-extrabold text-zinc-500">{p.category.toUpperCase()}</span>
+                        )}
                       </div>
                       <div className="flex-1 flex flex-col justify-between py-0.5">
                         <div className="flex justify-between items-start">
